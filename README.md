@@ -1,4 +1,4 @@
-# adavanced-rl
+# advanced-rl
 Implementation of some advanced Reinforcement Learning algorithm using TensorFlow 2.
 
 Implemented algorithms:
