@@ -31,10 +31,149 @@ def calc_qvals(rewards, gamma):
         sum_r *= gamma
         sum_r += r
         res.append(sum_r)
+
     return list(reversed(res))
 
 ########################################################################################################################
 
+
+def __compute_pg_loss__(policies, next_estimated_return, actions):
+    neg_log_prob = tf.nn.softmax_cross_entropy_with_logits(logits=policies, labels=actions)
+    policy_loss = tf.reduce_mean(tf.multiply(neg_log_prob, next_estimated_return))
+
+    return policy_loss
+
+########################################################################################################################
+
+
+class PolicyGradient(tf.keras.layers.Layer):
+    """
+        Definition of Policy Gradient model and custom training loop.
+    """
+
+    def __init__(self, output_dim, hidden_units=[32, 32], atari=False):
+        """
+        :param output_dim: output dimension as integer
+        """
+
+        super(PolicyGradient, self).__init__()
+        self.output_dim = output_dim
+
+        # Define common body
+        self.model = []
+        if not atari:
+            for hidden in hidden_units:
+                self.model.append(tf.keras.layers.Dense(units=hidden, activation='relu'))
+        else:
+            self.model.append(tf.keras.layers.Conv2D(filters=32,
+                                                           kernel_size=[8, 8],
+                                                           strides=[4, 4],
+                                                           activation='relu'))
+            self.model.append(tf.keras.layers.Conv2D(filters=64,
+                                                           kernel_size=[4, 4],
+                                                           strides=[2, 2],
+                                                           activation='relu'))
+            self.model.append(tf.keras.layers.Conv2D(filters=64,
+                                                           kernel_size=[3, 3],
+                                                           strides=[1, 1],
+                                                           activation='relu'))
+
+            self.model.append(tf.keras.layers.Flatten())
+            self.model.append(tf.keras.layers.Dense(512))
+
+        # Define actor and critic
+        self.model.append(tf.keras.layers.Dense(output_dim))
+
+        # Define optimizers
+        self.optimizer = tf.keras.optimizers.Adam()
+
+    def call(self, x):
+        """
+        Implement call method of tf.keras Layer.
+        :param x: inputs as tf.Tensor
+        :return: policy, value state and probabilities as tf.Tensor
+        """
+
+        for l in self.model:
+            x = l(x)
+
+        probs = tf.nn.softmax(x)
+
+        return x, probs
+
+    def train(self, env, num_steps, render, gamma):
+        """
+        Training loop.
+        :param env: gym environment
+        :param num_steps: training steps in the environment as int
+        :param render: True if you want to render the environment while training
+        :param gamma: discount factor as double
+        :return:
+        """
+
+        frames = 0
+
+        rewards = []
+        actions = []
+        states = []
+
+        # Create policy
+        policy = StochasticPolicy(env.action_space.n)
+
+        count = 0
+
+        while frames < num_steps:
+            game_over = False
+            s_t = env.reset()
+            score = 0
+
+            while not game_over:
+
+                if render:
+                    env.render()
+
+                logits, probs = self.call(s_t.reshape(1, *s_t.shape))
+                probs = probs.numpy().reshape(-1)
+                a_t = policy.select_action(probs)
+                action = np.zeros(env.action_space.n)
+                action[a_t] = 1
+                actions.append(action)
+                states.append(s_t)
+                s_tp1, r_t, game_over, _ = env.step(a_t)
+                rewards.append(r_t)
+                s_tp1 = np.array(s_tp1)
+                s_t = s_tp1
+
+                score += r_t
+                frames += 1
+
+            print('Epochs: {} | Reward: {}'.format(frames, score))
+
+            q_vals = calc_qvals(rewards, gamma=gamma)
+            states = np.asarray(states)
+            q_vals = np.asarray(q_vals)
+            actions = np.asarray(actions)
+
+            with tf.GradientTape(persistent=True) as tape:
+                policies, probs = self.call(states)
+                policy_loss = __compute_pg_loss__(policies, q_vals, actions)
+
+            dloss_policy = tape.gradient(policy_loss, self.trainable_variables)
+            self.optimizer.apply_gradients(zip(dloss_policy, self.trainable_variables))
+
+            print('Frame: {}/{} | Score: {} | Loss policy: {}'.
+                  format(frames, num_steps, score, policy_loss))
+
+            states = []
+            rewards = []
+            actions = []
+
+            count += 1
+
+
+
+
+########################################################################################################################
 
 def __compute_a2c_loss__(policies, probs, values, next_estimated_return, actions):
     advantage = next_estimated_return - tf.stop_gradient(values)

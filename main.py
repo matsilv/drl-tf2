@@ -6,11 +6,11 @@ import gym
 import argparse
 import tensorflow as tf
 
-from common.models import A2CNetwork, DDPG
+from common.models import A2CNetwork, DDPG, PolicyGradient
 from common.atari_wrapper import make_env, NormalizedEnv
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--env-name", type=str, choices=["a2c", "ddpg"],  help="Choose the algorithm")
+parser.add_argument("--alg", type=str, choices=["a2c", "ddpg", "pg"],  help="Choose the algorithm")
 parser.add_argument("--env-name", type=str, help="Gym registered environment")
 parser.add_argument("--render", action="store_true", default=False, help="Human rendering of the environment")
 parser.add_argument("--num-steps", type=int, default=100000, help="Number of timesteps in the environment")
@@ -43,7 +43,8 @@ if env_name is None:
 
 if not args.atari:
     env = gym.make(env_name)
-    env = NormalizedEnv(env)
+    if isinstance(env.action_space, gym.spaces.Box):
+        env = NormalizedEnv(env)
 else:
     env = make_env(env_name)
 
@@ -58,5 +59,8 @@ elif args.alg == "ddpg":
     agent = DDPG(num_states=env.observation_space.shape[0], num_actions=env.action_space.shape[0], actor_hidden_units=[32, 32],
                  critic_hidden_units=[256, 256])
     agent.train(env, num_steps, render, gamma, batch_size=128)
+elif args.alg == "pg":
+    agent = PolicyGradient(output_dim=env.action_space.n, hidden_units=[256, 128], atari=args.atari)
+    agent.train(env, num_steps, render, gamma)
 else:
     raise Exception("Algorithm not recognized")
