@@ -2,9 +2,10 @@
 
 from collections import deque
 import random
+import numpy as np
 
 
-# replay memory as ring buffer
+# Replay memory as ring buffer
 class ReplayExperienceBuffer:
     def __init__(self, maxlen):
         self.maxlen = maxlen
