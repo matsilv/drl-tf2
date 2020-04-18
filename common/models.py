@@ -6,6 +6,8 @@ import os
 import sys
 import numpy as np
 
+from common.memory import ReplayExperienceBuffer
+
 cwd = os.getcwd()
 # insert at 1, 0 is the script path (or '' in REPL)
 sys.path.insert(1, '{}/../'.format(cwd))
@@ -19,7 +21,7 @@ class DRLModel(tf.keras.Model):
     Deep Reinforcement Learning model.
     """
 
-    def __init__(self, output_dim, hidden_units=[32, 32], atari=False):
+    def __init__(self, input_shape, output_dim, hidden_units=[32, 32], atari=False):
         """
         Common initialization for all the DRL methods.
         :param output_dim: output dimension of the neural network, i.e. the actions space; as integer
@@ -33,9 +35,10 @@ class DRLModel(tf.keras.Model):
         self.model = []
         if not atari:
             for hidden in hidden_units:
-                self.model.append(tf.keras.layers.Dense(units=hidden, activation='relu'))
+                self.model.append(tf.keras.layers.Dense(input_shape=input_shape, units=hidden, activation='relu'))
         else:
-            self.model.append(tf.keras.layers.Conv2D(filters=32,
+            self.model.append(tf.keras.layers.Conv2D(input_shape=input_shape,
+                                                     filters=32,
                                                      kernel_size=[8, 8],
                                                      strides=[4, 4],
                                                      activation='relu'))
@@ -49,7 +52,7 @@ class DRLModel(tf.keras.Model):
                                                      activation='relu'))
 
             self.model.append(tf.keras.layers.Flatten())
-            self.model.append(tf.keras.layers.Dense(512))
+            self.model.append(tf.keras.layers.Dense(512, activation='relu'))
 
         # Create the actor
         self.actor = tf.keras.layers.Dense(output_dim)
@@ -107,12 +110,12 @@ class PolicyGradient(DRLModel):
         Definition of Policy Gradient RL algorithm.
     """
 
-    def __init__(self, output_dim, hidden_units=[32, 32], atari=False):
+    def __init__(self, input_shape, output_dim, hidden_units=[32, 32], atari=False):
         """
         :param output_dim: output dimension as integer
         """
 
-        super(PolicyGradient, self).__init__(output_dim, hidden_units, atari)
+        super(PolicyGradient, self).__init__(input_shape, output_dim, hidden_units, atari)
 
     def gradient_step(self, states, q_vals, actions):
         """
@@ -155,12 +158,12 @@ class A2C(DRLModel):
         Definition of A2C model and custom training loop.
     """
 
-    def __init__(self, output_dim, hidden_units=[32, 32], atari=False):
+    def __init__(self, input_shape, output_dim, hidden_units=[32, 32], atari=False):
         """
         :param output_dim: output dimension as integer
         """
 
-        super(A2C, self).__init__(output_dim, hidden_units, atari)
+        super(A2C, self).__init__(input_shape, output_dim, hidden_units, atari)
 
         # Define actor and critic
         self.actor = tf.keras.layers.Dense(output_dim)
@@ -208,7 +211,7 @@ class DeepQLearning(DRLModel):
         Deep Q-learning algorithm.
     """
 
-    def __init__(self, output_dim, hidden_units=[32, 32], atari=False, update_interval=1000, tau=0.99):
+    def __init__(self, input_shape, output_dim, hidden_units=[32, 32], atari=False, update_interval=1000, tau=0.99):
         """
         Common initialization for all the DRL methods.
         :param output_dim: output dimension of the neural network, i.e. the actions space; as integer
@@ -227,9 +230,10 @@ class DeepQLearning(DRLModel):
         self.model = []
         if not atari:
             for hidden in hidden_units:
-                self.model.append(tf.keras.layers.Dense(units=hidden, activation='relu'))
+                self.model.append(tf.keras.layers.Dense(input_shape=input_shape, units=hidden, activation='relu'))
         else:
-            self.model.append(tf.keras.layers.Conv2D(filters=32,
+            self.model.append(tf.keras.layers.Conv2D(input_shape=input_shape,
+                                                     filters=32,
                                                      kernel_size=[8, 8],
                                                      strides=[4, 4],
                                                      activation='relu'))
@@ -243,7 +247,7 @@ class DeepQLearning(DRLModel):
                                                      activation='relu'))
 
             self.model.append(tf.keras.layers.Flatten())
-            self.model.append(tf.keras.layers.Dense(512))
+            self.model.append(tf.keras.layers.Dense(512, activation='relu'))
 
         # Create the actor
         self.model.append(tf.keras.layers.Dense(output_dim))
@@ -255,12 +259,13 @@ class DeepQLearning(DRLModel):
         self.tgt_net = []
         if not atari:
             for hidden in hidden_units:
-                self.tgt_net.append(tf.keras.layers.Dense(units=hidden, activation='relu'))
+                self.tgt_net.append(tf.keras.layers.Dense(input_shape=input_shape, units=hidden, activation='relu'))
         else:
-            self.tgt_net.append(tf.keras.layers.Conv2D(filters=32,
-                                                     kernel_size=[8, 8],
-                                                     strides=[4, 4],
-                                                     activation='relu'))
+            self.tgt_net.append(tf.keras.layers.Conv2D(input_shape=input_shape,
+                                                       filters=32,
+                                                       kernel_size=[8, 8],
+                                                       strides=[4, 4],
+                                                       activation='relu'))
             self.tgt_net.append(tf.keras.layers.Conv2D(filters=64,
                                                      kernel_size=[4, 4],
                                                      strides=[2, 2],
@@ -380,11 +385,12 @@ class DeepQLearning(DRLModel):
 
 ########################################################################################################################
 
-'''class DDPG:
+
+class DDPG:
     """
     Definition of Deep Determistic Policy Gradient model and custom training loop.
     """
-    class Critic(tf.keras.layers.Model):
+    class Critic(tf.keras.Model):
         def __init__(self, input_shape, hidden_units, output_size):
             """
             Critic model definition.
@@ -395,21 +401,10 @@ class DeepQLearning(DRLModel):
             super(DDPG.Critic, self).__init__()
 
             # Neural Network definition
-            self.layers = []
+            self.nn_layers = []
             for hidden in hidden_units:
-                self.layers.append(tf.keras.layers.Dense(units=hidden, activation=tf.nn.relu))
-            self.layers.append(tf.keras.layers.Dense(units=output_size))
-
-            # Build TensorFlow graph
-            self.build(input_shape)
-
-        def build(self, input_shape):
-            """
-            Implement build method od tf.keras Layer
-            :param input_shape: input shape as tuple
-            :return:
-            """
-            super(DDPG.Critic, self).build(input_shape)
+                self.nn_layers.append(tf.keras.layers.Dense(units=hidden, activation=tf.nn.relu))
+            self.nn_layers.append(tf.keras.layers.Dense(units=output_size))
 
         def call(self, x):
             """
@@ -418,14 +413,14 @@ class DeepQLearning(DRLModel):
             :return: Q-values for state x as tf.Tensor
             """
 
-            for l in self.layers:
+            for l in self.nn_layers:
                 x = l(x)
 
             return x
 
     ####################################################################################################################
 
-    class Actor(tf.keras.layers.Layer):
+    class Actor(tf.keras.Model):
         def __init__(self, input_shape, hidden_units, output_size):
             """
             Actor model definition.
@@ -436,21 +431,10 @@ class DeepQLearning(DRLModel):
             super(DDPG.Actor, self).__init__()
 
             # Neural Network definition
-            self.layers = []
+            self.nn_layers = []
             for hidden in hidden_units:
-                self.layers.append(tf.keras.layers.Dense(units=hidden, activation=tf.nn.relu))
-            self.layers.append(tf.keras.layers.Dense(units=output_size, activation=tf.nn.tanh))
-
-            # Build TensorFlow graph
-            self.build(input_shape)
-
-        def build(self, input_shape):
-            """
-            Implement build method of tf.keras Layer
-            :param input_shape: input shape as tuple
-            :return:
-            """
-            super(DDPG.Actor, self).build(input_shape)
+                self.nn_layers.append(tf.keras.layers.Dense(units=hidden, activation=tf.nn.relu))
+            self.nn_layers.append(tf.keras.layers.Dense(units=output_size, activation=tf.nn.tanh))
 
         def call(self, x):
             """
@@ -459,14 +443,24 @@ class DeepQLearning(DRLModel):
             :return: Q-value for state x as tf.Tensor
             """
 
-            for l in self.layers:
+            for l in self.nn_layers:
                 x = l(x)
 
             return x
 
     ####################################################################################################################
 
-    def __init__(self, input_shape, num_actions, actor_hidden_units, critic_hidden_units):
+    def __init__(self, num_states, num_actions, actor_hidden_units, critic_hidden_units,
+                 memory_size, tau):
+        """
+
+        :param num_states: state space; as tuple
+        :param num_actions: actions space; as integer
+        :param actor_hidden_units: actor hidden units; as list of integer
+        :param critic_hidden_units: critic hidden units; as list of integer
+        :param memory_size: replay experience buffer size; as integer
+        :param tau: update network coefficient; as float
+        """
         # Initialize actor and critic
         self.actor = DDPG.Actor(num_states, actor_hidden_units, num_actions)
         self.critic = DDPG.Critic(num_states + num_actions, critic_hidden_units, num_actions)
@@ -485,20 +479,27 @@ class DeepQLearning(DRLModel):
         self.layer_copy(tau=1)
 
         # Initialize Replay Buffer
-        self.memory = ReplayExperienceBuffer(maxlen=50000)
+        self.memory = ReplayExperienceBuffer(maxlen=memory_size)
 
         # Define Adam optimizers
         self.actor_optimizer = tf.keras.optimizers.Adam(learning_rate=1e-4)
         self.critic_optimizer = tf.keras.optimizers.Adam(learning_rate=1e-3)
 
+        self.tau = tau
+
     ####################################################################################################################
 
     def layer_copy(self, tau):
+        """
+        Method to copy source network to the target one.
+        :param tau: copy coefficient; as float
+        :return:
+        """
         for src, tgt in zip(self.actor.trainable_variables, self.target_actor.trainable_variables):
-            tgt.assign(tau * src + (1 - tau) * tgt)
+            tgt.assign((1 - tau) * src + tau * tgt)
 
         for src, tgt in zip(self.critic.trainable_variables, self.target_critic.trainable_variables):
-            tgt.assign(tau * src + (1 - tau) * tgt)
+            tgt.assign((1 - tau) * src + tau * tgt)
 
     ####################################################################################################################
 
@@ -533,13 +534,13 @@ class DeepQLearning(DRLModel):
         frames = 0
 
         # Create random noise process
-        noise = OUNoise(env.action_space)
+        #noise = OUNoise(env.action_space)
 
         while frames < num_steps:
             game_over = False
             s_t = env.reset()
             score = 0
-            noise.reset()
+            #noise.reset()
 
             while not game_over:
 
@@ -583,12 +584,11 @@ class DeepQLearning(DRLModel):
                     dloss_actor = tape.gradient(actor_loss, self.actor.trainable_variables)
                     self.actor_optimizer.apply_gradients(zip(dloss_actor, self.actor.trainable_variables))
 
-                self.layer_copy(tau=1e-2)
-
+                self.layer_copy(tau=self.tau)
 
             print('Frame: {}/{} | Score: {} | Actor loss: {} | Critic loss: {}'.
-                  format(frames, num_steps, score, actor_loss, critic_loss))'''
-
+                  format(frames, num_steps, score, actor_loss, critic_loss))
 
 ########################################################################################################################
+
 

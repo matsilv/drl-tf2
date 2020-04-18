@@ -6,13 +6,13 @@ import gym
 import argparse
 import tensorflow as tf
 
-from common.models import A2C, PolicyGradient, DeepQLearning #, DDPG
+from common.models import A2C, PolicyGradient, DeepQLearning, DDPG
 from common.atari_wrapper import make_env, NormalizedEnv
 from common.agent import OffPolicyAgent, OnPolicyAgent
 from common.policy import StochasticPolicy, EpsilonGreedyPolicy
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--alg", type=str, choices=["a2c", "pg", "dqn"],  help="Choose the algorithm")
+parser.add_argument("--alg", type=str, choices=["a2c", "pg", "dqn", "ddpg"],  help="Choose the algorithm")
 parser.add_argument("--env-name", type=str, help="Gym registered environment")
 parser.add_argument("--render", action="store_true", default=False, help="Human rendering of the environment")
 parser.add_argument("--num-steps", type=int, default=100000, help="Number of timesteps in the environment")
@@ -59,19 +59,25 @@ gamma = float(args.gamma)
 batch_size = int(args.batch_size)
 test = args.test
 filepath = args.filepath
+input_shape=env.observation_space.shape
 
 if args.alg == "a2c":
-    model = A2C(output_dim=env.action_space.n, hidden_units=[32, 32], atari=args.atari)
+    model = A2C(input_shape=input_shape, output_dim=env.action_space.n, hidden_units=[32, 32], atari=args.atari)
     policy = StochasticPolicy(env.action_space.n)
     agent = OnPolicyAgent(env, policy, model)
 elif args.alg == "pg":
-    model = PolicyGradient(output_dim=env.action_space.n, hidden_units=[256, 128], atari=args.atari)
+    model = PolicyGradient(input_shape=input_shape, output_dim=env.action_space.n, hidden_units=[256, 128], atari=args.atari)
     policy = StochasticPolicy(env.action_space.n)
     agent = OnPolicyAgent(env, policy, model)
 elif args.alg == "dqn":
-    model = DeepQLearning(output_dim=env.action_space.n, hidden_units=[32, 32], atari=args.atari)
+    model = DeepQLearning(input_shape=input_shape, output_dim=env.action_space.n, hidden_units=[32, 32], atari=args.atari)
     policy = EpsilonGreedyPolicy(env.action_space.n, epsilon_start=1.0, epsilon_end=0.1, nb_steps=10000)
     agent = OffPolicyAgent(env, policy, model)
+elif args.alg == "ddpg":
+    agent = DDPG(num_states=env.observation_space.shape[0], num_actions=env.action_space.shape[0],
+                 actor_hidden_units=[32, 32], critic_hidden_units=[256, 256], memory_size=50000, tau=0.99)
+    agent.train(env, num_steps, render, gamma, batch_size=128)
+    exit(0)
 else:
     raise Exception("Algorithm not recognized")
 
