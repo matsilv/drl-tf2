@@ -9,7 +9,7 @@ import tensorflow as tf
 from common.models import A2C, PolicyGradient, DeepQLearning, DDPG
 from common.atari_wrapper import make_env, NormalizedEnv
 from common.agent import OffPolicyAgent, OnPolicyAgent
-from common.policy import StochasticPolicy, EpsilonGreedyPolicy
+from common.policy import StochasticPolicy, EpsilonGreedyPolicy, GreedyPolicy
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--alg", type=str, choices=["a2c", "pg", "dqn", "ddpg"],  help="Choose the algorithm")
@@ -71,7 +71,10 @@ elif args.alg == "pg":
     agent = OnPolicyAgent(env, policy, model)
 elif args.alg == "dqn":
     model = DeepQLearning(input_shape=input_shape, output_dim=env.action_space.n, hidden_units=[32, 32], atari=args.atari)
-    policy = EpsilonGreedyPolicy(env.action_space.n, epsilon_start=1.0, epsilon_end=0.1, nb_steps=10000)
+    if not test:
+        policy = EpsilonGreedyPolicy(env.action_space.n, epsilon_start=1.0, epsilon_end=0.1, nb_steps=10000)
+    else:
+        policy = GreedyPolicy(env.action_space.n)
     agent = OffPolicyAgent(env, policy, model)
 elif args.alg == "ddpg":
     agent = DDPG(num_states=env.observation_space.shape[0], num_actions=env.action_space.shape[0],
