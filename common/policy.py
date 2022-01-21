@@ -1,55 +1,106 @@
 # Author: Mattia Silvestri
 
+"""
+    RL policies.
+"""
+
 import random
 import numpy as np
 
+########################################################################################################################
 
-class Policy:
+
+class CategoricalPolicy:
     """
-    Abstract class for a policy.
+    Abstract class for a categorical policy.
     """
 
     def __init__(self, actions_space):
         """
-
-        :param actions_space: number of actions as integer
+        :param actions_space: int; number of actions.
         """
-        self.num_actions = actions_space
 
-    def select_action(self, **kwargs):
+        self._num_actions = actions_space
+
+    @property
+    def num_actions(self):
+        """
+        Getter for the actions space.
+        :return: int; the actions space.
+        """
+
+        return self._num_actions
+
+    def select_action(self, *args, **kwargs):
+        """
+        Select the action according to the strategy.
+        """
+
         raise NotImplementedError()
 
+########################################################################################################################
 
-class RandomPolicy(Policy):
+
+class CategoricalRandomPolicy(CategoricalPolicy):
     """
     Actions are randomly chosen.
     """
-    def select_action(self, **kwargs):
+
+    def __init__(self, actions_space):
+        """
+        :param actions_space: int; number of actions.
+        """
+
+        super(CategoricalRandomPolicy, self).__init__(actions_space)
+
+    def select_action(self):
+        """
+        Select the action according to the strategy.
+        """
+
         action = random.randint(0, self.num_actions-1)
         return action
 
+########################################################################################################################
 
-class GreedyPolicy(Policy):
+
+class CategoricalGreedyPolicy(CategoricalPolicy):
     """
     Always chose the best action.
     """
-    def select_action(self, q_values, **kwargs):
+
+    def select_action(self, q_values):
+        """
+        Select the best action accoring to the Q-values.
+        :param q_values: numpy.array of shape (n_actions, ); the Q-values.
+        :return:
+        """
         action = np.argmax(q_values)
         return action
 
+########################################################################################################################
 
-class StochasticPolicy(Policy):
+
+class CategoricalStochasticPolicy(CategoricalPolicy):
     """
-    Sample action from probability distribution given as input-
+    Sample action according to the probabilities values given as input.
     """
-    def select_action(self, probs, **kwargs):
+
+    def select_action(self, probs):
+        """
+        Select the action according to the probability values given as input.
+        :param probs: numpy.array of shape (n_actions,); the probability to choose each action.
+        :return:
+        """
         actions = np.arange(0, self.num_actions)
         action = np.random.choice(actions, size=1, p=probs)
 
         return action[0]
 
+########################################################################################################################
 
-class EpsilonGreedyPolicy(Policy):
+
+class EpsilonGreedyPolicy(CategoricalPolicy):
     """
     Epsilon greedy policy with epsilon linear annealing
     """
@@ -62,65 +113,38 @@ class EpsilonGreedyPolicy(Policy):
         :param nb_steps: number of steps for the annealing of epsilon; as integer
         """
         super(EpsilonGreedyPolicy, self).__init__(actions_space)
-        self.epsilon_start = epsilon_start
-        self.epsilon_end = epsilon_end
-        self.epsilon = epsilon_start
-        self.nb_steps = nb_steps
-        self.count = 1
+        self._count = 1
 
-    def select_action(self, q_values, **kwargs):
+        # Create the parameters for the linear annealing: f(x) = ax + b
+        self._angolar_coeff_anneal = -float(epsilon_start - epsilon_end) / float(nb_steps)
+        self._bias_coeff_anneal = float(epsilon_start)
+        self._epsilon_end = float(epsilon_end)
+        self._epsilon = epsilon_start
+
+    @property
+    def epsilon(self):
+        """
+        Getter for the current epsilon value.
+        :return: float; the current epsilon value.
         """
 
-        :param q_values: values from Q-function; as numpy array
-        :param kwargs:
+        return self._epsilon
+
+    def select_action(self, q_values):
+        """
+        With probability epsilon choose a random action; with probability (1-epsilon) choose the best action.
+        :param q_values: numpy.array; the Q-values.
         :return:
         """
-        if np.random.uniform() <= self.epsilon:
+        if np.random.uniform() <= self._epsilon:
             action = random.randint(0, self.num_actions-1)
         else:
             action = np.argmax(q_values)
 
-        # Linear annealing: f(x) = ax + b.
-        a = -float(self.epsilon_start - self.epsilon_end) / float(self.nb_steps)
-        b = float(self.epsilon_start)
-        self.epsilon = max(self.epsilon_end, a * float(self.count) + b)
+        self._epsilon = max(self._epsilon_end,
+                            self._angolar_coeff_anneal * float(self._count) + self._bias_coeff_anneal)
 
-        #print("Epsilon: {}".format(self.epsilon))
-
-        self.count += 1
+        self._count += 1
 
         return action
-
-
-"""
-Taken from https://github.com/vitchyr/rlkit/blob/master/rlkit/exploration_strategies/ou_strategy.py
-"""
-
-
-class OUNoise(object):
-    def __init__(self, action_space, mu=0.0, theta=0.15, max_sigma=0.3, min_sigma=0.3, decay_period=100000):
-        self.mu = mu
-        self.theta = theta
-        self.sigma = max_sigma
-        self.max_sigma = max_sigma
-        self.min_sigma = min_sigma
-        self.decay_period = decay_period
-        self.action_dim = action_space.shape[0]
-        self.low = action_space.low
-        self.high = action_space.high
-        self.reset()
-
-    def reset(self):
-        self.state = np.ones(self.action_dim) * self.mu
-
-    def evolve_state(self):
-        x = self.state
-        dx = self.theta * (self.mu - x) + self.sigma * np.random.randn(self.action_dim)
-        self.state = x + dx
-        return self.state
-
-    def get_action(self, action, t=0):
-        ou_state = self.evolve_state()
-        self.sigma = self.max_sigma - (self.max_sigma - self.min_sigma) * min(1.0, t / self.decay_period)
-        return np.clip(action + ou_state, self.low, self.high)
 
