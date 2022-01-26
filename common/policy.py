@@ -6,6 +6,7 @@
 
 import random
 import numpy as np
+from .utility import from_integer_to_categorical
 
 ########################################################################################################################
 
@@ -20,6 +21,7 @@ class CategoricalPolicy:
         :param actions_space: int; number of actions.
         """
 
+        super(CategoricalPolicy).__init__()
         self._num_actions = actions_space
 
     @property
@@ -31,6 +33,7 @@ class CategoricalPolicy:
 
         return self._num_actions
 
+    @from_integer_to_categorical
     def select_action(self, *args, **kwargs):
         """
         Select the action according to the strategy.
@@ -53,6 +56,7 @@ class CategoricalRandomPolicy(CategoricalPolicy):
 
         super(CategoricalRandomPolicy, self).__init__(actions_space)
 
+    @from_integer_to_categorical
     def select_action(self):
         """
         Select the action according to the strategy.
@@ -69,6 +73,7 @@ class CategoricalGreedyPolicy(CategoricalPolicy):
     Always chose the best action.
     """
 
+    @from_integer_to_categorical
     def select_action(self, q_values):
         """
         Select the best action accoring to the Q-values.
@@ -86,6 +91,7 @@ class CategoricalStochasticPolicy(CategoricalPolicy):
     Sample action according to the probabilities values given as input.
     """
 
+    @from_integer_to_categorical
     def select_action(self, probs):
         """
         Select the action according to the probability values given as input.
@@ -100,7 +106,7 @@ class CategoricalStochasticPolicy(CategoricalPolicy):
 ########################################################################################################################
 
 
-class EpsilonGreedyPolicy(CategoricalPolicy):
+class CategoricalEpsilonGreedyPolicy(CategoricalPolicy):
     """
     Epsilon greedy policy with epsilon linear annealing
     """
@@ -112,7 +118,7 @@ class EpsilonGreedyPolicy(CategoricalPolicy):
         :param epsilon_end: final value for epsilon; as float
         :param nb_steps: number of steps for the annealing of epsilon; as integer
         """
-        super(EpsilonGreedyPolicy, self).__init__(actions_space)
+        super(CategoricalEpsilonGreedyPolicy, self).__init__(actions_space)
         self._count = 1
 
         # Create the parameters for the linear annealing: f(x) = ax + b
@@ -130,6 +136,7 @@ class EpsilonGreedyPolicy(CategoricalPolicy):
 
         return self._epsilon
 
+    @from_integer_to_categorical
     def select_action(self, q_values):
         """
         With probability epsilon choose a random action; with probability (1-epsilon) choose the best action.

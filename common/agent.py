@@ -8,6 +8,8 @@ import numpy as np
 
 from common.utility import calc_qvals
 from common.memory import ReplayExperienceBuffer
+from gym.spaces.discrete import Discrete
+from gym.spaces.box import Box
 
 ########################################################################################################################
 
@@ -28,6 +30,19 @@ class DRLAgent:
         self._env = env
         self._policy = policy
         self._model = model
+
+    def _step(self, action):
+        """
+        Private method to ensure environment input action is given in the proper format to Gym.
+        :param action: numpy.array; the action.
+        :return:
+        """
+        if isinstance(self._env.action_space, Discrete):
+            assert action.shape == (self._env.action_space.n,)
+            assert np.sum(action) == 1
+
+            action = np.argmax(action)
+            return self._env.step(action)
 
     def train(self, num_steps, render, gamma, batch_size, filename):
         """
@@ -72,7 +87,7 @@ class DRLAgent:
                 a_t = self._policy.select_action(probs)
 
                 # Perform a step
-                s_tp1, r_t, game_over, _ = self._env.step(a_t)
+                s_tp1, r_t, game_over, _ = self._step(a_t)
                 s_t = s_tp1
 
                 score += 1
@@ -112,10 +127,9 @@ class OnPolicyAgent(DRLAgent):
         steps = 0
 
         # Sampled trajectory variables
-        rewards = []
-        actions = []
-        states = []
-        q_vals = []
+        actions = list()
+        states = list()
+        q_vals = list()
 
         while steps < num_steps:
 
@@ -124,10 +138,9 @@ class OnPolicyAgent(DRLAgent):
             s_t = self._env.reset()
             score = 0
 
-            current_states = []
-            current_actions = []
-            current_q_vals = []
-            current_rewards = []
+            current_states = list()
+            current_actions = list()
+            current_rewards = list()
 
             # Perform an episode
             while not game_over:
@@ -138,14 +151,12 @@ class OnPolicyAgent(DRLAgent):
                 # Sample an action from policy
                 probs = self._model.act(np.expand_dims(s_t, axis=0))
                 probs = np.squeeze(probs.numpy())
-                a_t = self._policy.select_action(probs)
-                action = np.zeros(self._env.action_space.n)
-                action[a_t] = 1
+                action = self._policy.select_action(probs)
                 current_actions.append(action)
 
                 # Sample current state, next state and reward
                 current_states.append(s_t)
-                s_tp1, r_t, game_over, _ = self._env.step(a_t)
+                s_tp1, r_t, game_over, _ = self._step(action)
                 current_rewards.append(r_t)
                 s_t = s_tp1
 
@@ -172,13 +183,14 @@ class OnPolicyAgent(DRLAgent):
                       format(steps, num_steps, score, loss))
 
                 # Clear sample trajectory variables
-                states = []
-                rewards = []
-                actions = []
-                q_vals = []
+                states = list()
+                actions = list()
+                q_vals = list()
 
         # Save model weights
         self.model.save_weights(filename, save_format='tf')
+
+########################################################################################################################
 
 
 class OffPolicyAgent(DRLAgent):
@@ -218,28 +230,26 @@ class OffPolicyAgent(DRLAgent):
 
             # Initialize the environment
             game_over = False
-            s_t = self.env.reset()
+            s_t = self._env.reset()
             score = 0
 
             # Perform an episode
             while not game_over:
 
                 if render:
-                    self.env.render()
+                    self._env.render()
 
                 # Sample an action from policy
-                probs = self.model.act(s_t.reshape(1, *s_t.shape))
-                probs = probs.numpy().reshape(-1)
-                a_t = self.policy.select_action(probs)
-                action = np.zeros(self.env.action_space.n)
-                action[a_t] = 1
+                probs = self._model.act(np.expand_dims(s_t, axis=0))
+                probs = np.squeeze(probs.numpy())
+                action = self._policy.select_action(probs)
 
                 # Sample current state, next state and reward
-                s_tp1, r_t, game_over, _ = self.env.step(a_t)
-                s_tp1 = np.array(s_tp1)
+                s_tp1, r_t, game_over, _ = self._step(action)
+                s_t = s_tp1
 
                 # Insert sample in the buffer
-                self.buffer.insert((np.array(s_t), a_t, r_t, s_tp1, game_over))
+                self.buffer.insert((np.array(s_t), action, r_t, s_tp1, game_over))
 
                 # Sample a mini-batch from experience and perform an update
                 if len(self.buffer) > batch_size:
